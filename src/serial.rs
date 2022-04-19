@@ -194,6 +194,11 @@ where
         }
     }
 
+    /// Return true if the tx register is empty (and can accept data)
+    pub fn is_rxne(&self) -> bool {
+        unsafe { self.usart.isr.read().rxne().bit_is_set() }
+    }
+
     pub fn split(self) -> (Tx<USART>, Rx<USART>) {
         (
             Tx {
