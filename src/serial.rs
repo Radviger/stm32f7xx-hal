@@ -194,6 +194,34 @@ where
         }
     }
 
+    /// Return true if the line idle status is set
+    ///
+    /// The line idle status bit is set when the peripheral detects the receive line is idle.
+    /// The bit is cleared by software, by calling `clear_idle()`.
+    pub fn is_idle(&self) -> bool {
+        unsafe { self.usart.isr.read().idle().bit_is_set() }
+    }
+
+    /// Clear the line idle status bit
+    pub fn clear_idle(&mut self) {
+        unsafe { self.usart.icr.write(|w| w.idlecf().set_bit()) }
+        let _ = self.usart.isr.read();
+        let _ = self.usart.isr.read(); // Delay 2 peripheral clocks
+    }
+
+    /// Return true if the line busy status is set
+    ///
+    /// The busy status bit is set when there is communication active on the receive line,
+    /// and reset at the end of reception.
+    pub fn is_busy(&self) -> bool {
+        unsafe { self.usart.isr.read().busy().bit_is_set() }
+    }
+
+    /// Return true if the tx register is empty (and can accept data)
+    pub fn is_txe(&self) -> bool {
+        unsafe { self.usart.isr.read().txe().bit_is_set() }
+    }
+
     /// Return true if the tx register is empty (and can accept data)
     pub fn is_rxne(&self) -> bool {
         unsafe { self.usart.isr.read().rxne().bit_is_set() }
