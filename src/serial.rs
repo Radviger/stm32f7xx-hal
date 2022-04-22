@@ -329,7 +329,7 @@ where
     /// Stop listening for `Rxne` event
     pub fn unlisten(&mut self) {
         // unsafe: rxneie bit accessed by Rx part only
-        let cr1 = &unsafe { &*$USARTX::ptr() }.cr1;
+        let cr1 = &unsafe { &*USART::ptr() }.cr1;
         cr1.modify(|_, w| w.rxneie().disabled());
         let _ = cr1.read();
         let _ = cr1.read(); // Delay 2 peripheral clocks
