@@ -8,10 +8,21 @@ use crate::gpio::{self, Analog};
 
 use crate::pac::{ADC1, ADC2, ADC3, ADC_COMMON};
 
+use crate::signature::{VDDA_CALIB, VrefCal};
+
 use cortex_m::asm::delay;
 use fugit::HertzU32 as Hertz;
 
 use embedded_hal::adc::{Channel, OneShot};
+
+/// Vref internal signal, used for calibration
+pub struct Vref;
+
+/// Vbat internal signal, used for monitoring the battery (if used)
+pub struct Vbat;
+
+/// Core temperature internal signal
+pub struct Temperature;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
@@ -120,6 +131,9 @@ adc_pins!(ADC1,
     gpio::PC3<Analog>  => 13,
     gpio::PC4<Analog>  => 14,
     gpio::PC5<Analog>  => 15,
+    Temperature        => 16,
+    Vref               => 17,
+    Vbat               => 18,
 );
 
 adc_pins!(ADC2,
@@ -168,6 +182,8 @@ pub struct Adc<ADC> {
     sample_time: SampleTime,
     align: Align,
     sysclk: Hertz,
+    /// VDDA in millivolts calculated from the factory calibration and vrefint
+    calibrated_vdda: u32,
 }
 
 /// Stored ADC config can be restored using the `Adc::restore_cfg` method
@@ -192,6 +208,7 @@ macro_rules! adc_hal {
                     sample_time: SampleTime::default(),
                     align: Align::default(),
                     sysclk: clocks.sysclk(),
+                    calibrated_vdda: VDDA_CALIB,
                 };
                 <$ADC>::enable(apb2);
                 if reset {
@@ -497,6 +514,66 @@ impl Adc<ADC1> {
         let v_chan = (data as u32) * 1210 / (self.read_vref(adc_common) as u32);
 
         v_chan as u16
+    }
+
+    /// Calculates the system VDDA by sampling the internal VREF channel and comparing
+    /// the result with the value stored at the factory.
+    pub fn calibrate(&mut self) {
+        let vref_en = self.temperature_and_vref_enabled();
+        if !vref_en {
+            self.enable_temperature_and_vref();
+        }
+
+        let vref_cal = VrefCal::get().read();
+        let vref_samp = self.read(&mut Vref).unwrap(); //This can't actually fail, it's just in a result to satisfy hal trait
+
+        self.calibrated_vdda = (VDDA_CALIB * u32::from(vref_cal)) / u32::from(vref_samp);
+        if !vref_en {
+            self.disable_temperature_and_vref();
+        }
+    }
+
+    /// Enables the vbat internal channel
+    pub fn enable_vbat(&self) {
+        unsafe {
+            let common = &(*ADC_COMMON::ptr());
+            common.ccr.modify(|_, w| w.vbate().set_bit());
+        }
+    }
+
+    /// Enables the vbat internal channel
+    pub fn disable_vbat(&self) {
+        unsafe {
+            let common = &(*ADC_COMMON::ptr());
+            common.ccr.modify(|_, w| w.vbate().clear_bit());
+        }
+    }
+
+    /// Enables the temp and vref internal channels.
+    /// They can't work while vbat is also enabled so this method also disables vbat.
+    pub fn enable_temperature_and_vref(&mut self) {
+        //VBAT prevents TS and VREF from being sampled
+        self.disable_vbat();
+        unsafe {
+            let common = &(*ADC_COMMON::ptr());
+            common.ccr.modify(|_, w| w.tsvrefe().set_bit());
+        }
+    }
+
+    /// Disables the temp and vref internal channels
+    pub fn disable_temperature_and_vref(&mut self) {
+        unsafe {
+            let common = &(*ADC_COMMON::ptr());
+            common.ccr.modify(|_, w| w.tsvrefe().clear_bit());
+        }
+    }
+
+    /// Returns if the temp and vref internal channels are enabled
+    pub fn temperature_and_vref_enabled(&mut self) -> bool {
+        unsafe {
+            let common = &(*ADC_COMMON::ptr());
+            common.ccr.read().tsvrefe().bit_is_set()
+        }
     }
 }
 
