@@ -16,6 +16,7 @@ use crate::{
         dma2::{self, st::cr},
         Interrupt, DMA1, DMA2, NVIC,
     },
+    adc,
     qspi,
     rcc::{Enable, RccBus, Reset},
     serial, spi, state,
