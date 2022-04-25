@@ -465,15 +465,15 @@ macro_rules! adc_hal {
             ) -> dma::Transfer<Self, B, dma::Ready>
                 where
                     B: DerefMut + 'static,
-                    B::Target: AsMutSlice<Element = u8>,
+                    B::Target: AsMutSlice<Element = u16>,
             {
                 // This is safe, as we're only using the USART instance to access the
                 // address of one register.
                 let address = &unsafe { &*ADC1::ptr() }.dr as *const _ as _;
 
                 self.set_discontinuous_mode(None);
-                self.rb.cr2.modify(|_, w| w.align().bit(self.align.into()));
-                self.rb.cr2.modify(|_, w| w.dma().set_bit().adon().set_bit());
+                self.rb.cr2.modify(|_, w| w.align().bit(self.align.into()).dma().set_bit().adon().set_bit());
+                self.rb.cr1.modify(|_, w| w.dds().set_bit());
 
                 // Safe, because the trait bounds on this method guarantee that `buffer`
                 // can be written to safely.
