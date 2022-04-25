@@ -448,6 +448,11 @@ impl_target!(
 
     // QUADSPI is half-duplex, uses one channel for both send/receive
     qspi::RxTx<pac::QUADSPI>, DMA2, Stream7, Channel3, DMA2_STREAM7;
+
+    // ADC receive
+    adc::Adc<pac::ADC1>, DMA2, Stream0, Channel0, DMA2_STREAM0;
+    adc::Adc<pac::ADC2>, DMA2, Stream2, Channel1, DMA2_STREAM2;
+    adc::Adc<pac::ADC3>, DMA2, Stream0, Channel2, DMA2_STREAM0;
 );
 
 #[cfg(any(

@@ -2,6 +2,10 @@
 
 #![allow(dead_code)]
 
+use core::marker::PhantomData;
+use core::ops::DerefMut;
+use core::pin::Pin;
+use as_slice::AsMutSlice;
 use crate::rcc::{Clocks, Enable, Reset, APB2};
 
 use crate::gpio::{self, Analog};
@@ -14,6 +18,8 @@ use cortex_m::asm::delay;
 use fugit::HertzU32 as Hertz;
 
 use embedded_hal::adc::{Channel, OneShot};
+use crate::{dma, state};
+use crate::dma::{Ready, Transfer};
 
 /// Vref internal signal, used for calibration
 pub struct Vref;
@@ -445,6 +451,42 @@ macro_rules! adc_hal {
                 self.power_down();
                 <$ADC>::disable(apb2);
                 self.rb
+            }
+
+            /// Reads data using DMA until `buffer` is full
+            ///
+            /// DMA supports transfers up to 65535 bytes. If `buffer` is longer, this
+            /// method will panic.
+            pub fn with_dma<B>(
+                mut self,
+                buffer: Pin<B>,
+                dma: &dma::Handle<<Self as dma::Target>::Instance, state::Enabled>,
+                stream: <Self as dma::Target>::Stream,
+            ) -> dma::Transfer<Self, B, dma::Ready>
+                where
+                    B: DerefMut + 'static,
+                    B::Target: AsMutSlice<Element = u8>,
+            {
+                // This is safe, as we're only using the USART instance to access the
+                // address of one register.
+                let address = &unsafe { &*ADC1::ptr() }.dr as *const _ as _;
+
+                self.set_discontinuous_mode(None);
+                self.rb.cr2.modify(|_, w| w.align().bit(self.align.into()));
+                self.rb.cr2.modify(|_, w| w.dma().set_bit().adon().set_bit());
+
+                // Safe, because the trait bounds on this method guarantee that `buffer`
+                // can be written to safely.
+                unsafe {
+                    dma::Transfer::new(
+                        dma,
+                        stream,
+                        buffer,
+                        self,
+                        address,
+                        dma::Direction::PeripheralToMemory,
+                    )
+                }
             }
         }
 
