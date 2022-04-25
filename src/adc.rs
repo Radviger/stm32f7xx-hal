@@ -408,6 +408,16 @@ macro_rules! adc_hal {
                 res
             }
 
+            /// Resets the end-of-conversion flag
+            pub fn clear_end_of_conversion_flag(&mut self) {
+                self.rb.sr.modify(|_, w| w.eoc().clear_bit());
+            }
+
+            /// Returns the current sample stored in the ADC data register
+            pub fn current_sample(&self) -> u16 {
+                self.rb.dr.read().data().bits()
+            }
+
             /// Powers down the ADC, disables the ADC clock and releases the ADC Peripheral
             pub fn release(mut self, apb2: &mut APB2) -> $ADC {
                 self.power_down();
