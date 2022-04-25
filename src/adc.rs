@@ -409,11 +409,11 @@ macro_rules! adc_hal {
               does not. Therefore, ensure you do not do any no-op modifications
               to `cr2` just before calling this function
             */
-            fn convert(&mut self, chan: u8) -> u16 {
+            pub fn convert(&mut self, chan: u8) -> u16 {
                 // Dummy read in case something accidentally triggered
                 // a conversion by writing to CR2 without changing any
                 // of the bits
-                self.rb.dr.read().data().bits();
+                self.current_sample();
 
                 self.set_channel_sample_time(chan, self.sample_time);
                 self.rb.sqr3.modify(|_, w| unsafe { w.sq1().bits(chan) });
@@ -423,7 +423,7 @@ macro_rules! adc_hal {
                 // ADC wait for conversion results
                 while self.rb.sr.read().eoc().bit_is_clear() {}
 
-                let res = self.rb.dr.read().data().bits();
+                let res = self.current_sample();
                 res
             }
 
@@ -442,6 +442,7 @@ macro_rules! adc_hal {
             }
 
             /// Returns the current sample stored in the ADC data register
+            #[inline]
             pub fn current_sample(&self) -> u16 {
                 self.rb.dr.read().data().bits()
             }
