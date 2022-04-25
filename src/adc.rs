@@ -472,7 +472,7 @@ macro_rules! adc_hal {
                 let address = &unsafe { &*ADC1::ptr() }.dr as *const _ as _;
 
                 self.set_discontinuous_mode(None);
-                self.rb.cr2.modify(|_, w| w.align().bit(self.align.into()).dma().set_bit().dds().set_bit().adon().set_bit());
+                self.rb.cr2.modify(|_, w| w.align().bit(self.align.into()).dma().set_bit().dds().continuous().adon().set_bit());
 
                 // Safe, because the trait bounds on this method guarantee that `buffer`
                 // can be written to safely.
