@@ -506,7 +506,7 @@ impl Adc<ADC1> {
         };
 
         //ADC1_IN17
-        let val = self.convert(17u8);
+        let val = self.convert(Vref::channel());
 
         if tsv_off {
             adc_common.ccr.modify(|_, w| w.tsvrefe().clear_bit());
@@ -535,10 +535,13 @@ impl Adc<ADC1> {
         let vref_en = self.temperature_and_vref_enabled();
         if !vref_en {
             self.enable_temperature_and_vref();
+            // The reference manual says that a stabilization time is needed after the powering the
+            // sensor, this time can be found in the datasheets.
+            delay(self.sysclk.raw() / 80_000);
         }
 
         let vref_cal = VrefCal::get().read();
-        let vref_samp = self.read(&mut Vref).unwrap(); //This can't actually fail, it's just in a result to satisfy hal trait
+        let vref_samp = self.convert(Vref::channel());
 
         self.calibrated_vdda = (VDDA_CALIB * u32::from(vref_cal)) / u32::from(vref_samp);
         if !vref_en {
