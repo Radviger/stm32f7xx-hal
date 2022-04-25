@@ -184,6 +184,7 @@ pub struct Adc<ADC> {
     sysclk: Hertz,
     /// VDDA in millivolts calculated from the factory calibration and vrefint
     calibrated_vdda: u32,
+    max_sample: u32,
 }
 
 /// Stored ADC config can be restored using the `Adc::restore_cfg` method
@@ -209,6 +210,7 @@ macro_rules! adc_hal {
                     align: Align::default(),
                     sysclk: clocks.sysclk(),
                     calibrated_vdda: VDDA_CALIB,
+                    max_sample: (1 << nb_resolution_bits),
                 };
                 <$ADC>::enable(apb2);
                 if reset {
@@ -258,10 +260,7 @@ macro_rules! adc_hal {
 
             /// Returns the largest possible sample value for the current settings
             pub fn max_sample(&self) -> u16 {
-                match self.align {
-                    Align::Left => u16::max_value(),
-                    Align::Right => (1 << 12) - 1,
-                }
+                (self.max_sample - 1) as u16
             }
 
             #[inline(always)]
@@ -414,15 +413,21 @@ macro_rules! adc_hal {
                 self.rb.sqr3.modify(|_, w| unsafe { w.sq1().bits(chan) });
 
                 // ADC start conversion of regular sequence
-                self.rb
-                    .cr2
-                    .modify(|_, w| w.swstart().set_bit().align().bit(self.align.into()));
-                while self.rb.cr2.read().swstart().bit_is_set() {}
+                self.start_conversion();
                 // ADC wait for conversion results
                 while self.rb.sr.read().eoc().bit_is_clear() {}
 
                 let res = self.rb.dr.read().data().bits();
                 res
+            }
+
+            /// Starts conversion sequence. Waits for the hardware to indicate it's actually started.
+            pub fn start_conversion(&mut self) {
+                self.clear_end_of_conversion_flag();
+                //Start conversion
+                self.rb.cr2.modify(|_, w| w.swstart().set_bit().align().bit(self.align.into()));
+
+                while !self.rb.sr.read().strt().bit_is_set() {}
             }
 
             /// Resets the end-of-conversion flag
@@ -510,10 +515,18 @@ impl Adc<ADC1> {
         val
     }
 
+    #[deprecated(note = "please use `sample_to_millivolts` instead")]
     pub fn bits_to_voltage(&mut self, adc_common: &ADC_COMMON, data: u16) -> u16 {
         let v_chan = (data as u32) * 1210 / (self.read_vref(adc_common) as u32);
 
         v_chan as u16
+    }
+
+    /// Converts a sample value to millivolts using calibrated VDDA and configured resolution.
+    /// Due to the ADC characteristics VDDA will never be reached as described in #362 and
+    /// [AN2834-How to get the best ADC accuracy in STM32 microcontrollers](https://www.st.com/resource/en/application_note/cd00211314-how-to-get-the-best-adc-accuracy-in-stm32-microcontrollers-stmicroelectronics.pdf) in section 3.1.2.
+    pub fn sample_to_millivolts(&self, sample: u16) -> u16 {
+        ((u32::from(sample) * self.calibrated_vdda) / self.max_sample) as u16
     }
 
     /// Calculates the system VDDA by sampling the internal VREF channel and comparing
