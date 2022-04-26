@@ -292,6 +292,7 @@ macro_rules! adc_hal {
             // CONT bit >> 0 (continuous)
             // see EXTEN and EXTSEL[3:0]: for triggers (page:471)
             // SWSTART: Start conversion of regular channels
+            #[inline]
             fn setup_oneshot(&mut self) {
                 self.rb
                     .cr2
@@ -309,6 +310,7 @@ macro_rules! adc_hal {
             }
 
             /// setup the ADC Resolution : Bits 25:24 RES[1:0]
+            #[inline]
             fn resolution(&mut self, resol_bits: u8) {
                 match resol_bits {
                     12 => self.rb.cr1.modify(|_, w| w.res().bits(0b00)),
@@ -320,6 +322,7 @@ macro_rules! adc_hal {
             }
 
             // See : ADC sample time registers (page: 474)
+            #[inline]
             fn set_channel_sample_time(&mut self, chan: u8, sample_time: SampleTime) {
                 self.rb.smpr2.modify(|r, w| unsafe {
                     w.bits((r.bits() & !0x07) | ((sample_time as u32) & 0x07))
@@ -356,6 +359,7 @@ macro_rules! adc_hal {
 
             ////////////////
 
+            #[inline]
             fn set_regular_sequence(&mut self, channels: &[u8]) {
                 let len = channels.len();
                 let bits = channels
@@ -385,10 +389,12 @@ macro_rules! adc_hal {
                 self.rb.sqr1.modify(|_, w| w.l().bits((len - 1) as u8));
             }
 
+            #[inline]
             fn set_continuous_mode(&mut self, continuous: bool) {
                 self.rb.cr2.modify(|_, w| w.cont().bit(continuous));
             }
 
+            #[inline]
             fn set_discontinuous_mode(&mut self, channels_count: Option<u8>) {
                 self.rb.cr1.modify(|_, w| match channels_count {
                     Some(count) => w.discen().set_bit().discnum().bits(count),
@@ -409,6 +415,7 @@ macro_rules! adc_hal {
               does not. Therefore, ensure you do not do any no-op modifications
               to `cr2` just before calling this function
             */
+            #[inline]
             pub fn convert(&mut self, chan: u8) -> u16 {
                 // Dummy read in case something accidentally triggered
                 // a conversion by writing to CR2 without changing any
@@ -428,6 +435,7 @@ macro_rules! adc_hal {
             }
 
             /// Starts conversion sequence. Waits for the hardware to indicate it's actually started.
+            #[inline]
             pub fn start_conversion(&mut self) {
                 self.clear_end_of_conversion_flag();
                 //Start conversion
@@ -437,6 +445,7 @@ macro_rules! adc_hal {
             }
 
             /// Resets the end-of-conversion flag
+            #[inline]
             pub fn clear_end_of_conversion_flag(&mut self) {
                 self.rb.sr.modify(|_, w| w.eoc().clear_bit());
             }
